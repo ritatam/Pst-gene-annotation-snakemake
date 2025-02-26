@@ -1,0 +1,5 @@
+ref_fasta: "/scratch/xe2/ht5438/198e_anno/Pst198E.verkko.3d-dna.review_v1.chromosomes.fasta"
+ref_name: "Pst198E"
+input_read_dir: "/scratch/xe2/ht5438/198e_anno/data"
+
+outdir: "/scratch/xe2/ht5438/198e_anno/output"

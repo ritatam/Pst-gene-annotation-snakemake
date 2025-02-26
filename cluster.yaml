@@ -1,0 +1,19 @@
+__default__:
+    mem: 10G
+    queue: normal
+    time: "24:00:00"
+    ncpus: 4
+    ngpus: 0
+    storage: scratch/xf3+gdata/xf3+scratch/xe2+gdata/xe2
+    project: xf3
+    name: "{rule}" 
+
+minimap2_splice_mapping:
+    mem: 40G
+    ncpus: 20
+    time: "48:00:00"
+
+group0:
+    mem: 10G
+    ncpus: 4
+    time: "5:00:00"
