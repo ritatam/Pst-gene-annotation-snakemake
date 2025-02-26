@@ -23,7 +23,7 @@ for filename in os.listdir(config["input_read_dir"]):
 
 
 #####################
-#####RULES START#####
+##### ALIGNMENT #####
 #####################
 
 fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
@@ -35,7 +35,8 @@ rule all:
         expand(os.path.join(fastq_stats_dir, "{sample}.fastq.stats"), sample=SAMPLES),
         expand(os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bam"), sample=SAMPLES),
         expand(os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bamstats"), sample=SAMPLES),
-        expand(os.path.join(splice_aln_hap_partitioned_dir, "{sample}." + config["ref_name"] + ".hap{hap}.bam"), sample=SAMPLES, hap=["A","B"])
+        expand(os.path.join(splice_aln_hap_partitioned_dir, "{sample}." + config["ref_name"] + ".hap{hap}.bam"), sample=SAMPLES, hap=["A","B"]),
+        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv")
 
 
 rule seqkit_fastq_quality_stats:
@@ -49,7 +50,6 @@ rule seqkit_fastq_quality_stats:
         " && . $(conda info --base)/etc/profile.d/conda.sh"
         " && conda activate /g/data/xf3/miniconda/envs/common-tools; "
         "seqkit stats --all -T {input.fastq} > {output.stats}"
-
 
 
 rule minimap2_splice_mapping:
@@ -79,6 +79,20 @@ rule generate_mapping_stats:
         "samtools flagstat {input.bam} > {output.stats}"
 
 
+rule aggregate_read_and_mapping_stats:
+    input:
+        expand(os.path.join(fastq_stats_dir, "{sample}.fastq.stats"), sample=SAMPLES),
+        expand(os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bamstats"), sample=SAMPLES)
+    params:
+        fastq_stats_dir,
+        splice_aln_dir,
+        config["ref_name"]
+    output:
+        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv")
+    script:
+        "scripts/aggregate_read_alignment_stats_reports.py"
+
+
 rule partition_haplotype_bam:
     input:
         bam = os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bam")
@@ -94,4 +108,10 @@ rule partition_haplotype_bam:
         "samtools index -@4 {output.hapA}; "
         "samtools index -@4 {output.hapB}"
 
+
+
+
+#####################
+##### ALIGNMENT #####
+#####################
 
