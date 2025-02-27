@@ -30,30 +30,30 @@ assert len(SAMPLE_IDS) == 1, "All samples must have the same sample name. ([samp
 SAMPLE_ID = SAMPLE_IDS.pop()
 CONDITIONS = list(CONDITIONS)
 REPLICATES = sorted([int(rep.split("rep")[-1]) for rep in list(REPLICATES)])
-print("\nPlease check fields extracted from sample read fastq filename:\n")
-print("SAMPLES:", SAMPLES, "\n")
-print("SAMPLE_ID:", SAMPLE_ID, "\n")
-print("CONDITIONS:", CONDITIONS, "\n")
-print("REPLICATES:", REPLICATES, "\n\n")
+# print("\nPlease check fields extracted from sample read fastq filename:\n")
+# print("SAMPLES:", SAMPLES, "\n")
+# print("SAMPLE_ID:", SAMPLE_ID, "\n")
+# print("CONDITIONS:", CONDITIONS, "\n")
+# print("REPLICATES:", REPLICATES, "\n"*2)
+
+
+fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
+splice_aln_dir = os.path.join(config["outdir"], "splice_aln")
+splice_aln_hap_partitioned_dir = os.path.join(splice_aln_dir, "haplotype_partitioned")
+stringtie3_dir = os.path.join(config["outdir"], "stringtie3")
+espresso_dir = os.path.join(config["outdir"], "espresso")
+
+
+rule all:
+    input:
+        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
+        expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
+        os.path.join(espresso_dir, "ESPRESSO_S.done")
 
 
 #####################
 ##### ALIGNMENT #####
 #####################
-
-fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
-splice_aln_dir = os.path.join(config["outdir"], "splice_aln")
-splice_aln_hap_partitioned_dir = os.path.join(splice_aln_dir, "haplotype_partitioned")
-
-rule all:
-    input:
-        expand(os.path.join(fastq_stats_dir, "{sample}.fastq.stats"), sample=SAMPLES),
-        expand(os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bam"), sample=SAMPLES),
-        expand(os.path.join(splice_aln_dir, "{sample}." + config["ref_name"] + ".bamstats"), sample=SAMPLES),
-        expand(os.path.join(splice_aln_hap_partitioned_dir, "{sample}." + config["ref_name"] + ".hap{hap}.bam"), sample=SAMPLES, hap=HAPLOTYPES),
-        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
-        expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam"), condition=CONDITIONS, hap=HAPLOTYPES)
-
 
 rule seqkit_fastq_quality_stats:
     input:
@@ -143,28 +143,58 @@ rule merge_bams_per_condition:
         "samtools index -@4 {output.hapB_bam}"
 
 
-
-# rule merge_replicates_per_condition:
-#     input:
-#         expand(os.path.join(splice_aln_hap_partitioned_dir, "{sample}." + config["ref_name"] + ".hap{haplotype}.bam"), sample=SAMPLES, haplotype=HAPLOTYPES)
-#     output:
-#         hapA_merged_bam = os.path.join(splice_aln_hap_partitioned_dir,  "{sample_name}_{condition}_rep{rep}."+config["ref_name"] + ".hapA.merged.bam"),
-#         hapB_merged_bam = os.path.join(splice_aln_hap_partitioned_dir,  "{sample_name}_{condition}_rep{rep}."+config["ref_name"] + ".hapB.merged.bam"),
-#     run:
-#         for condition in CONDITIONS:
-#             hapA_bams = " ".join([n for n in input if condition in os.path.basename(n) and "hapA" in os.path.basename(n)])
-#             hapB_bams = " ".join([n for n in input if condition in os.path.basename(n) and "hapB" in os.path.basename(n)])
-#             shell("samtools merge -@4 -o {output.hapA_merged_bam} {hapA_bams}")
-#             shell("samtools merge -@4 -o {output.hapB_merged_bam} {hapB_bams}")
-
-        
-
 #################################
 ##### STRUCTURAL ANNOTATION #####
 #################################
 
-# stringtie3_dir = os.path.join(config["outdir"], "stringtie3")
-# espresso_dir = os.path.join(config["outdir"], "espresso")
+rule stringtie3_assembly:
+    input:
+        bam = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam")
+    output:
+        gtf = os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf")
+    params:
+        stringtie3 = config["stringtie3_bin"]
+    shell:
+        "{params.stringtie3} -L -m 50 -p 16 -o {output.gtf} {input.bam}"
+
+
+# 1. prepare samples.tsv, tab separated file with columns1 being file name and column 2 being sample name.
+# 2. ESPRESSO_S.pl to use bam to detect putative splice junctions.
+#       ESPRESSO_S.pl -L samples.tsv -F ref.fasta -O output_dir -Q 0 -T 36
+# 3. ESPRESSO_C.pl to determin high confidence and optiomal sets of splice junctions.
+#        ESPRESSO_C.pl -I  wdir_generated_by_ESPRESSO_S.pl -F ref.fasta -X targetID -T 24 --sort_buffer_size 10G 
+# 4. ESPRESSO_Q.pl to identify and quantify (although i only want to identify)
+
+
+rule prepare_ESPRESSO_samples_tsv:
+    input:
+        expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam"), condition=CONDITIONS, hap=HAPLOTYPES)
+    output:
+        os.path.join(espresso_dir, "samples.tsv")
+    params:
+        splice_aln_hap_partitioned_dir
+    shell:
+        "echo -e "" > {output}; "
+        'for n in {params}/*.merged.bam; do echo -e "$n\t$(basename $n | sed -e \'s/.merged.*//\' -e \'s/\./_/g\')" >> {output}; '
+        "sed -i '/^$/d' {output}; done"
+
+
+rule ESPRESSO_S:
+    input:
+        sample_tsv = os.path.join(espresso_dir, "samples.tsv")
+    output:
+        checkpoint = os.path.join(espresso_dir, "ESPRESSO_S.done")
+    params:
+        espresso = config["espresso_src_dir"]
+    envmodules:
+        "samtools/1.12"
+    shell:
+        "perl {params.espresso}/ESPRESSO_S.pl -L {input.sample_tsv} -F {config[ref_fasta]} -O {espresso_dir} -Q 0 -T 48 --alignment_read_groups && "
+        "touch {output.checkpoint}"
+
+
+
+
 
 # rule stringtie3_assembly:
 #     input:

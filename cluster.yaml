@@ -1,9 +1,10 @@
 __default__:
     mem: 10G
     queue: normal
-    time: "24:00:00"
+    time: "8:00:00"
     ncpus: 4
     ngpus: 0
+    jobfs: 1Mb
     storage: scratch/xf3+gdata/xf3+scratch/xe2+gdata/xe2
     project: xf3
     name: "{rule}" 
@@ -17,3 +18,14 @@ group0:
     mem: 10G
     ncpus: 4
     time: "5:00:00"
+
+stringtie3_assembly:
+    mem: 20G
+    ncpus: 16
+    time: "5:00:00"
+
+ESPRESSO_S:
+    mem: 192G
+    ncpus: 48
+    jobfs: 100Gb
+    time: "48:00:00"
