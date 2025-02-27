@@ -36,7 +36,6 @@ REPLICATES = sorted([int(rep.split("rep")[-1]) for rep in list(REPLICATES)])
 # print("CONDITIONS:", CONDITIONS, "\n")
 # print("REPLICATES:", REPLICATES, "\n"*2)
 
-
 fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
 splice_aln_dir = os.path.join(config["outdir"], "splice_aln")
 splice_aln_hap_partitioned_dir = os.path.join(splice_aln_dir, "haplotype_partitioned")
@@ -44,11 +43,12 @@ stringtie3_dir = os.path.join(config["outdir"], "stringtie3")
 espresso_dir = os.path.join(config["outdir"], "espresso")
 
 
+
 rule all:
     input:
         os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
         expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
-        os.path.join(espresso_dir, "ESPRESSO_S.done")
+        os.path.join(espresso_dir, "ESPRESSO_C.done")
 
 
 #####################
@@ -183,7 +183,8 @@ rule ESPRESSO_S:
     input:
         sample_tsv = os.path.join(espresso_dir, "samples.tsv")
     output:
-        checkpoint = os.path.join(espresso_dir, "ESPRESSO_S.done")
+        checkpoint = os.path.join(espresso_dir, "ESPRESSO_S.done"),
+        sample_tsv = os.path.join(espresso_dir, "samples.tsv.updated")
     params:
         espresso = config["espresso_src_dir"]
     envmodules:
@@ -193,8 +194,27 @@ rule ESPRESSO_S:
         "touch {output.checkpoint}"
 
 
+rule ESPRESSO_C:
+    input:
+        sample_tsv = os.path.join(espresso_dir, "samples.tsv.updated"),
+        checkpoint = os.path.join(espresso_dir, "ESPRESSO_S.done")
+    output:
+        os.path.join(espresso_dir, "ESPRESSO_C.done")
+    params:
+        espresso = config["espresso_src_dir"],
+        num_samples = str(sum(1 for _ in open(os.path.join(espresso_dir, "samples.tsv.updated")))-1)
+    envmodules:
+        "parallel/20191022"
+    shell:
+        "export PATH=$PATH:{config[hmmer_src_dir]}; "
+        'parallel -j 4 "perl {params.espresso}/ESPRESSO_C.pl --in {espresso_dir} -F {config[ref_fasta]} -X {{}} -T 24" ::: $(seq 0 {params.num_samples})'
 
 
+# rule ESPRESSO_Q:
+#     input:
+#         os.path.join(espresso_dir, "ESPRESSO_C.done")
+#     shell:
+#         ""
 
 # rule stringtie3_assembly:
 #     input:

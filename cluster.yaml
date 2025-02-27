@@ -29,3 +29,9 @@ ESPRESSO_S:
     ncpus: 48
     jobfs: 100Gb
     time: "48:00:00"
+
+ESPRESSO_C:
+    mem: 192G
+    ncpus: 96
+    jobfs: 100Gb
+    time: "48:00:00"

@@ -24,7 +24,7 @@ mkdir -p $logdir
 export TMPDIR=${PBS_JOBFS:-$TMPDIR}
 TARGET=${TARGET:-all}
 
-QSUB="qsub -q {cluster.queue} -l ncpus={cluster.ncpus} -l ngpus={cluster.ngpus}"
+QSUB="qsub -q {cluster.queue} -l ncpus={cluster.ncpus} -l ngpus={cluster.ngpus} -l jobfs={cluster.jobfs}"
 QSUB="$QSUB -l walltime={cluster.time} -l mem={cluster.mem} -N {cluster.name} -l storage={cluster.storage}"
 QSUB="$QSUB -l wd -m abe -j oe -o $logdir -P {cluster.project}" 
 
