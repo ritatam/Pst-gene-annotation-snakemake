@@ -22,19 +22,21 @@ for filename in os.listdir(config["input_read_dir"]):
 # extract fields in the sample name 
 SAMPLE_IDS, CONDITIONS, REPLICATES = set(), set(), set()
 for sample in SAMPLES:
+    assert sample.count("_") == 2
     sample_id, condition, replicate = sample.split("_")
     SAMPLE_IDS.add(sample_id)
     CONDITIONS.add(condition)
     REPLICATES.add(replicate)
-assert len(SAMPLE_IDS) == 1, "All samples must have the same sample name. ([sample_id]_[condition]_rep[replicate_number].fastq.gz)"
+assert len(SAMPLE_IDS) == 1, "All samples must have the same sample id. ([sample_id]_[condition]_rep[replicate_number].fastq.gz)"
 SAMPLE_ID = SAMPLE_IDS.pop()
 CONDITIONS = list(CONDITIONS)
 REPLICATES = sorted([int(rep.split("rep")[-1]) for rep in list(REPLICATES)])
-# print("\nPlease check fields extracted from sample read fastq filename:\n")
-# print("SAMPLES:", SAMPLES, "\n")
-# print("SAMPLE_ID:", SAMPLE_ID, "\n")
-# print("CONDITIONS:", CONDITIONS, "\n")
-# print("REPLICATES:", REPLICATES, "\n"*2)
+print("\nPlease check fields extracted from sample read fastq filename:\n")
+print("SAMPLES:", " ".join(SAMPLES), "\n")
+print("SAMPLE COUNT:", len(SAMPLES), "\n")
+print("SAMPLE_ID:", SAMPLE_ID, "\n")
+print("CONDITIONS:", " ".join(CONDITIONS), "\n")
+print("REPLICATES:", " ".join([str(n) for n in REPLICATES]), "\n"*2)
 
 fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
 splice_aln_dir = os.path.join(config["outdir"], "splice_aln")
@@ -42,13 +44,14 @@ splice_aln_hap_partitioned_dir = os.path.join(splice_aln_dir, "haplotype_partiti
 stringtie3_dir = os.path.join(config["outdir"], "stringtie3")
 espresso_dir = os.path.join(config["outdir"], "espresso")
 
-
+num_rep_merged_files = len(CONDITIONS)*len(HAPLOTYPES)
+print(num_rep_merged_files)
 
 rule all:
     input:
         os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
         expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
-        os.path.join(espresso_dir, "ESPRESSO_C.done")
+        expand(os.path.join(espresso_dir, "ESPRESSO_C_{ID}.done"), ID=range(num_rep_merged_files))
 
 
 #####################
@@ -199,15 +202,14 @@ rule ESPRESSO_C:
         sample_tsv = os.path.join(espresso_dir, "samples.tsv.updated"),
         checkpoint = os.path.join(espresso_dir, "ESPRESSO_S.done")
     output:
-        os.path.join(espresso_dir, "ESPRESSO_C.done")
+        checkpoint = os.path.join(espresso_dir, "ESPRESSO_C_{ID}.done")
     params:
         espresso = config["espresso_src_dir"],
-        num_samples = str(sum(1 for _ in open(os.path.join(espresso_dir, "samples.tsv.updated")))-1)
-    envmodules:
-        "parallel/20191022"
+        espresso_id = "{ID}"
     shell:
         "export PATH=$PATH:{config[hmmer_src_dir]}; "
-        'parallel -j 4 "perl {params.espresso}/ESPRESSO_C.pl --in {espresso_dir} -F {config[ref_fasta]} -X {{}} -T 24" ::: $(seq 0 {params.num_samples})'
+        "perl {params.espresso}/ESPRESSO_C.pl --in {espresso_dir} -F {config[ref_fasta]} -X {params.espresso_id} -T 16 && "
+        "touch {output.checkpoint}"
 
 
 # rule ESPRESSO_Q:

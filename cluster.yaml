@@ -31,7 +31,7 @@ ESPRESSO_S:
     time: "48:00:00"
 
 ESPRESSO_C:
-    mem: 192G
-    ncpus: 96
-    jobfs: 100Gb
+    mem: 110G
+    ncpus: 16
+    jobfs: 80Gb
     time: "48:00:00"
