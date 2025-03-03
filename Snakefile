@@ -47,11 +47,19 @@ espresso_dir = os.path.join(config["outdir"], "espresso")
 num_rep_merged_files = len(CONDITIONS)*len(HAPLOTYPES)
 print(num_rep_merged_files)
 
+
+#######################
+##### RULES START #####
+#######################
+
+
+localrules: preprocess_ESPRESSO_Q
+
 rule all:
     input:
         os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
         expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
-        expand(os.path.join(espresso_dir, "ESPRESSO_C_{ID}.done"), ID=range(num_rep_merged_files))
+        expand(os.path.join(espresso_dir, "espresso_q", SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.compatible_isoforms_per_read.tsv"), condition=CONDITIONS, hap=HAPLOTYPES)
 
 
 #####################
@@ -161,14 +169,6 @@ rule stringtie3_assembly:
         "{params.stringtie3} -L -m 50 -p 16 -o {output.gtf} {input.bam}"
 
 
-# 1. prepare samples.tsv, tab separated file with columns1 being file name and column 2 being sample name.
-# 2. ESPRESSO_S.pl to use bam to detect putative splice junctions.
-#       ESPRESSO_S.pl -L samples.tsv -F ref.fasta -O output_dir -Q 0 -T 36
-# 3. ESPRESSO_C.pl to determin high confidence and optiomal sets of splice junctions.
-#        ESPRESSO_C.pl -I  wdir_generated_by_ESPRESSO_S.pl -F ref.fasta -X targetID -T 24 --sort_buffer_size 10G 
-# 4. ESPRESSO_Q.pl to identify and quantify (although i only want to identify)
-
-
 rule prepare_ESPRESSO_samples_tsv:
     input:
         expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam"), condition=CONDITIONS, hap=HAPLOTYPES)
@@ -212,22 +212,29 @@ rule ESPRESSO_C:
         "touch {output.checkpoint}"
 
 
-# rule ESPRESSO_Q:
-#     input:
-#         os.path.join(espresso_dir, "ESPRESSO_C.done")
-#     shell:
-#         ""
+rule preprocess_ESPRESSO_Q:
+    input:
+        checkpoint = expand(os.path.join(espresso_dir, "ESPRESSO_C_{ID}.done"), ID=range(num_rep_merged_files)),
+        merged_bam = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam"),
+        sample_tsv = os.path.join(espresso_dir, "samples.tsv.updated")
+    output:
+        individual_sample_tsv = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.samples.tsv")
+    params:
+        espresso_q_outbase = os.path.join(espresso_dir)
+    shell:
+        "scripts/espresso_q_preprocessing.sh {input.merged_bam} {input.sample_tsv} {params.espresso_q_outbase} > {output.individual_sample_tsv}"
 
-# rule stringtie3_assembly:
-#     input:
-#         expand(os.path.join(splice_aln_hap_partitioned_dir, "{sample}." + config["ref_name"] + ".hap{haplotype}}.bam"), sample=SAMPLES, haplotype=HAPLOTYPES)
-#     output:
-#         gtf = os.path.join(stringtie3_dir, "{sample}.stringtie3.gtf")
-#     params:
-#         stringtie3 = config["stringtie3_bin"]
-#     shell:
-#         "{params.stringtie3} {input.bam} -p {threads} -G {config['ref_gtf']} -o {output.gtf}"
 
+rule ESPRESSO_Q:
+    input:
+        individual_sample_tsv = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.samples.tsv")
+    output:
+        isoforms_tsv = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.compatible_isoforms_per_read.tsv")
+    params:
+        espresso = config["espresso_src_dir"],
+        outdir = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}")
+    shell:
+        "perl {params.espresso}/ESPRESSO_Q.pl -L {input.individual_sample_tsv} -T 24 -V {output.isoforms_tsv} -O {params.outdir}"
 
 
 # stringtie3
@@ -236,4 +243,4 @@ rule ESPRESSO_C:
 # espresso
 
 
-# gene prediction: codingquarry
+# gene prediction: codingquarryq
