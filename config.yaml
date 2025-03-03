@@ -7,3 +7,4 @@ outdir: "/scratch/xe2/ht5438/198e_anno/output"
 stringtie3_bin: "/g/data/xf3/ht5438/softwares/stringtie3/stringtie"
 espresso_src_dir: "/g/data/xf3/ht5438/softwares/espresso_v_1_5_0/src" # rmb to run ./src/Parasil/build to compile parasail
 hmmer_src_dir: "/g/data/xf3/ht5438/softwares/hmmer-3.4/src"
+gffread_bin: "/g/data/xf3/ht5438/softwares/gffread/gffread"

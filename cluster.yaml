@@ -35,3 +35,9 @@ ESPRESSO_C:
     ncpus: 16
     jobfs: 80Gb
     time: "48:00:00"
+
+ESPRESSO_C:
+    mem: 110G
+    ncpus: 24
+    jobfs: 20Gb
+    time: "48:00:00"

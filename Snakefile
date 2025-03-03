@@ -4,7 +4,9 @@ from glob import glob
 configfile: "config.yaml"
 
 REF = config["ref_fasta"]
+REF_NAME = config["ref_name"]
 HAPLOTYPES = ["A", "B"]
+OUTDIR = config["outdir"]
 
 # filename check and extract sample name
 SAMPLES = []
@@ -31,21 +33,21 @@ assert len(SAMPLE_IDS) == 1, "All samples must have the same sample id. ([sample
 SAMPLE_ID = SAMPLE_IDS.pop()
 CONDITIONS = list(CONDITIONS)
 REPLICATES = sorted([int(rep.split("rep")[-1]) for rep in list(REPLICATES)])
-print("\nPlease check fields extracted from sample read fastq filename:\n")
-print("SAMPLES:", " ".join(SAMPLES), "\n")
-print("SAMPLE COUNT:", len(SAMPLES), "\n")
-print("SAMPLE_ID:", SAMPLE_ID, "\n")
-print("CONDITIONS:", " ".join(CONDITIONS), "\n")
-print("REPLICATES:", " ".join([str(n) for n in REPLICATES]), "\n"*2)
+# print("\nPlease check fields extracted from sample read fastq filename:\n")
+# print("SAMPLES:", " ".join(SAMPLES), "\n")
+# print("SAMPLE COUNT:", len(SAMPLES), "\n")
+# print("SAMPLE_ID:", SAMPLE_ID, "\n")
+# print("CONDITIONS:", " ".join(CONDITIONS), "\n")
+# print("REPLICATES:", " ".join([str(n) for n in REPLICATES]), "\n"*2)
 
-fastq_stats_dir = os.path.join(config["outdir"], "fastq_stats")
-splice_aln_dir = os.path.join(config["outdir"], "splice_aln")
+fastq_stats_dir = os.path.join(OUTDIR, "fastq_stats")
+splice_aln_dir = os.path.join(OUTDIR, "splice_aln")
 splice_aln_hap_partitioned_dir = os.path.join(splice_aln_dir, "haplotype_partitioned")
-stringtie3_dir = os.path.join(config["outdir"], "stringtie3")
-espresso_dir = os.path.join(config["outdir"], "espresso")
+stringtie3_dir = os.path.join(OUTDIR, "stringtie3")
+espresso_dir = os.path.join(OUTDIR, "espresso")
 
 num_rep_merged_files = len(CONDITIONS)*len(HAPLOTYPES)
-print(num_rep_merged_files)
+# print(num_rep_merged_files)
 
 
 #######################
@@ -53,14 +55,14 @@ print(num_rep_merged_files)
 #######################
 
 
-localrules: preprocess_ESPRESSO_Q
+localrules: preprocess_ESPRESSO_Q, convert_espresso_gtf_to_fasta, convert_stringtie3_gtf_to_fasta
 
 rule all:
     input:
-        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv"),
+        os.path.join(OUTDIR, "all_samples_read_alignment_stats_summary.tsv"),
         expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
-        expand(os.path.join(espresso_dir, "espresso_q", SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.compatible_isoforms_per_read.tsv"), condition=CONDITIONS, hap=HAPLOTYPES)
-
+        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
+        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
 
 #####################
 ##### ALIGNMENT #####
@@ -115,7 +117,7 @@ rule aggregate_read_and_mapping_stats:
         splice_aln_dir,
         config["ref_name"]
     output:
-        os.path.join(config["outdir"], "all_samples_read_alignment_stats_summary.tsv")
+        os.path.join(OUTDIR, "all_samples_read_alignment_stats_summary.tsv")
     script:
         "scripts/aggregate_read_alignment_stats_reports.py"
 
@@ -229,18 +231,49 @@ rule ESPRESSO_Q:
     input:
         individual_sample_tsv = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.samples.tsv")
     output:
+        outdir = directory(os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}")),
+        gtf = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}", SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.gtf"),
         isoforms_tsv = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.compatible_isoforms_per_read.tsv")
     params:
-        espresso = config["espresso_src_dir"],
-        outdir = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}")
+        espresso = config["espresso_src_dir"]
     shell:
-        "perl {params.espresso}/ESPRESSO_Q.pl -L {input.individual_sample_tsv} -T 24 -V {output.isoforms_tsv} -O {params.outdir}"
+        "perl {params.espresso}/ESPRESSO_Q.pl -L {input.individual_sample_tsv} -T 24 -V {output.isoforms_tsv} -O {output.outdir}; "
+        "mv {output.outdir}/*.gtf {output.gtf}"
 
 
-# stringtie3
+rule convert_espresso_gtf_to_fasta:
+    input:
+        gtf = os.path.join(espresso_dir, SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}", SAMPLE_ID+".{condition}."+config["ref_name"]+".hap{hap}.gtf")
+    output:
+        gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.espresso.gtf"),
+        tmp = temporary(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.tmp")),
+        fasta = os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.fasta")
+    params:
+        gffread_bin = config["gffread_bin"],
+        header = f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.ESPRESSO"
+    shell:
+        "cp {input.gtf} {output.gtf}; "
+        "{params.gffread_bin} {output.gtf} -g {REF} -w {output.tmp}; "
+        "sed 's/^>ESPRESSO/>{params.header}/g' {output.tmp} > {output.fasta}"
 
 
-# espresso
+rule convert_stringtie3_gtf_to_fasta:
+    input:
+        gtf = os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf")
+    output:
+        gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.gtf"),
+        tmp = temporary(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.tmp")),
+        fasta = os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta")
+    params:
+        gffread_bin = config["gffread_bin"],
+        header = f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3"
+    shell:
+        "cp {input.gtf} {output.gtf}; "
+        "{params.gffread_bin} {output.gtf} -g {REF} -w {output.tmp}; "
+        "sed 's/^>STRG/>{params.header}/g' {output.tmp} > {output.fasta}"
+
+
+
 
 
 # gene prediction: codingquarryq
