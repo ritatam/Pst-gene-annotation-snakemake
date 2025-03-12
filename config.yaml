@@ -1,10 +1,10 @@
-ref_fasta: "/scratch/xe2/ht5438/198e_anno/Pst198E.verkko.3d-dna.review_v1.chromosomes.fasta"
+ref_fasta: "/scratch/xe2/ht5438/198e_anno/Pst198E.v2.fasta"
 ref_name: "Pst198E"
 input_read_dir: "/scratch/xe2/ht5438/198e_anno/data"
 
 outdir: "/scratch/xe2/ht5438/198e_anno/output"
 
 stringtie3_bin: "/g/data/xf3/ht5438/softwares/stringtie3/stringtie"
-espresso_src_dir: "/g/data/xf3/ht5438/softwares/espresso_v_1_5_0/src" # rmb to run ./src/Parasil/build to compile parasail
+espresso_src_dir: "/g/data/xf3/ht5438/softwares/espresso_v_1_5_0/src" # rmb to run ./src/Parasil/build to compile parasail when installing espresso
 hmmer_src_dir: "/g/data/xf3/ht5438/softwares/hmmer-3.4/src"
 gffread_bin: "/g/data/xf3/ht5438/softwares/gffread/gffread"

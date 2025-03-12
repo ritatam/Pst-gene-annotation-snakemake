@@ -19,6 +19,11 @@ group0:
     ncpus: 4
     time: "5:00:00"
 
+extract_merged_haplotype_partitioned_reads:
+    mem: 20G
+    ncpus: 20
+    time: "05:00:00"
+
 stringtie3_assembly:
     mem: 20G
     ncpus: 16
@@ -36,7 +41,7 @@ ESPRESSO_C:
     jobfs: 80Gb
     time: "48:00:00"
 
-ESPRESSO_C:
+ESPRESSO_Q:
     mem: 110G
     ncpus: 24
     jobfs: 20Gb

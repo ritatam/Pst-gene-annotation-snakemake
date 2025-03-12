@@ -55,14 +55,11 @@ num_rep_merged_files = len(CONDITIONS)*len(HAPLOTYPES)
 #######################
 
 
-localrules: preprocess_ESPRESSO_Q, convert_espresso_gtf_to_fasta, convert_stringtie3_gtf_to_fasta
+localrules: preprocess_ESPRESSO_Q, convert_espresso_gtf_to_fasta, convert_stringtie3_gtf_to_fasta, finish
 
 rule all:
     input:
-        os.path.join(OUTDIR, "all_samples_read_alignment_stats_summary.tsv"),
-        expand(os.path.join(stringtie3_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
-        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
-        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
+        os.path.join(OUTDIR, "finish.txt")
 
 #####################
 ##### ALIGNMENT #####
@@ -73,7 +70,6 @@ rule seqkit_fastq_quality_stats:
         fastq = os.path.join(config["input_read_dir"], "{sample}.fastq.gz")
     output:
         stats = os.path.join(fastq_stats_dir, "{sample}.fastq.stats")
-    group: "group0"
     shell:
         "set +eu "
         " && . $(conda info --base)/etc/profile.d/conda.sh"
@@ -154,6 +150,17 @@ rule merge_bams_per_condition:
         "samtools merge -@4 {output.hapB_bam} $(ls {params.hapB_bams}); "
         "samtools index -@4 {output.hapA_bam}; "
         "samtools index -@4 {output.hapB_bam}"
+
+
+rule extract_merged_haplotype_partitioned_reads:
+    input:
+        bam = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam")
+    output:
+        fastq = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.fastq.gz")
+    envmodules:
+        "samtools/1.12"
+    shell:
+        "samtools bam2fq -@20 {input.bam} | gzip > {output.fastq}"
 
 
 #################################
@@ -273,7 +280,13 @@ rule convert_stringtie3_gtf_to_fasta:
         "sed 's/^>STRG/>{params.header}/g' {output.tmp} > {output.fasta}"
 
 
-
-
-
-# gene prediction: codingquarryq
+rule finish:
+    input:
+        expand(os.path.join(splice_aln_hap_partitioned_dir, f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.merged.fastq.gz"), condition=CONDITIONS, hap=HAPLOTYPES),
+        os.path.join(OUTDIR, "all_samples_read_alignment_stats_summary.tsv"),
+        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
+        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta"), condition=CONDITIONS, hap=HAPLOTYPES)
+    output:
+        os.path.join(OUTDIR, "finish.txt")
+    shell:
+        "touch {output}"
