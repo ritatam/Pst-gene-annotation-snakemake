@@ -33,6 +33,7 @@ assert len(SAMPLE_IDS) == 1, "All samples must have the same sample id. ([sample
 SAMPLE_ID = SAMPLE_IDS.pop()
 CONDITIONS = list(CONDITIONS)
 REPLICATES = sorted([int(rep.split("rep")[-1]) for rep in list(REPLICATES)])
+INFECTION_CONDITIONS = [n for n in CONDITIONS if n.endswith("dpi")]
 # print("\nPlease check fields extracted from sample read fastq filename:\n")
 # print("SAMPLES:", " ".join(SAMPLES), "\n")
 # print("SAMPLE COUNT:", len(SAMPLES), "\n")
@@ -315,6 +316,34 @@ rule stringtie_merge_gtf:
         "{params.stringtie3} --merge -p 4 -o {output} $(echo $(ls {params.expresso_gtf}) $(ls {params.stringtie_gtf}) | tr '\\n' ' ')"
 
 
+rule stringtie_merge_spores_gtf:
+    input:
+        expresso_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.espresso.gtf"), condition=["spores"], hap=HAPLOTYPES),
+        stringtie_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.gtf"), condition=["spores"], hap=HAPLOTYPES)
+    params:
+        expresso_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.spores.{REF_NAME}.hap{{hap}}.espresso.gtf"),
+        stringtie_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.spores.{REF_NAME}.hap{{hap}}.stringtie3.gtf"),
+        stringtie3 = config["stringtie3_bin"]
+    output:
+        os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.spores.merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf")
+    shell:
+        "{params.stringtie3} --merge -p 4 -o {output} $(echo $(ls {params.expresso_gtf}) $(ls {params.stringtie_gtf}) | tr '\\n' ' ')"
+
+
+rule stringtie_merge_infections_gtf:
+    input:
+        expresso_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.espresso.gtf"), condition=INFECTION_CONDITIONS, hap=HAPLOTYPES),
+        stringtie_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.gtf"), condition=INFECTION_CONDITIONS, hap=HAPLOTYPES)
+    params:
+        expresso_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.*dpi.{REF_NAME}.hap{{hap}}.espresso.gtf"),
+        stringtie_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.*dpi.{REF_NAME}.hap{{hap}}.stringtie3.gtf"),
+        stringtie3 = config["stringtie3_bin"]
+    output:
+        os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.infections.merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf")
+    shell:
+        "{params.stringtie3} --merge -p 4 -o {output} $(echo $(ls {params.expresso_gtf}) $(ls {params.stringtie_gtf}) | tr '\\n' ' ')"
+
+
 rule finish:
     input:
         expand(os.path.join(splice_aln_hap_partitioned_dir, f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.merged.fastq.gz"), condition=CONDITIONS, hap=HAPLOTYPES),
@@ -324,6 +353,8 @@ rule finish:
         expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.bam"), hap=HAPLOTYPES),
         expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.fastq.gz"), hap=HAPLOTYPES),
         expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.stringtie_merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf"), hap=HAPLOTYPES),
+        expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.spores.merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf"), hap=HAPLOTYPES),
+        expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.infections.merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf"), hap=HAPLOTYPES),
     output:
         os.path.join(OUTDIR, "finish.txt")
     shell:
