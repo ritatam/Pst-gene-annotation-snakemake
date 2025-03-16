@@ -46,3 +46,8 @@ ESPRESSO_Q:
     ncpus: 24
     jobfs: 20Gb
     time: "48:00:00"
+
+merge_bams_all_conditions:
+    mem: 20G
+    ncpus: 20
+    time: "5:00:00"
