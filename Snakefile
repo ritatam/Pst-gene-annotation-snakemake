@@ -61,6 +61,11 @@ rule all:
     input:
         os.path.join(OUTDIR, "finish.txt")
 
+
+# TO-DO: add porechop
+# TO-DO: add chopper
+
+
 #####################
 ##### ALIGNMENT #####
 #####################
@@ -161,6 +166,22 @@ rule extract_merged_haplotype_partitioned_reads:
         "samtools/1.12"
     shell:
         "samtools bam2fq -@20 {input.bam} | gzip > {output.fastq}"
+    
+
+rule merge_bams_all_conditions:
+    input:
+        expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".{condition}."+config["ref_name"] + ".hap{hap}.merged.bam"), condition=CONDITIONS, hap=HAPLOTYPES)
+    params:
+        os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+".*."+config["ref_name"] + ".hap{hap}.merged.bam")
+    output:
+        bam = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.bam"),
+        fastq = os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.fastq.gz")
+    envmodules:
+        "samtools/1.12"
+    shell:
+        "samtools merge -@20 {output.bam} $(ls {params}); "
+        "samtools index -@20 {output.bam}; "
+        "samtools bam2fq -@20 {output.bam} | gzip > {output.fastq}"
 
 
 #################################
@@ -280,12 +301,29 @@ rule convert_stringtie3_gtf_to_fasta:
         "sed 's/^>STRG/>{params.header}/g' {output.tmp} > {output.fasta}"
 
 
+rule stringtie_merge_gtf:
+    input:
+        expresso_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.espresso.gtf"), condition=CONDITIONS, hap=HAPLOTYPES),
+        stringtie_gtf = expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.gtf"), condition=CONDITIONS, hap=HAPLOTYPES)
+    params:
+        expresso_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.*.{REF_NAME}.hap{{hap}}.espresso.gtf"),
+        stringtie_gtf = os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.*.{REF_NAME}.hap{{hap}}.stringtie3.gtf"),
+        stringtie3 = config["stringtie3_bin"]
+    output:
+        os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.stringtie_merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf")
+    shell:
+        "{params.stringtie3} --merge -p 4 -o {output} $(echo $(ls {params.expresso_gtf}) $(ls {params.stringtie_gtf}) | tr '\\n' ' ')"
+
+
 rule finish:
     input:
         expand(os.path.join(splice_aln_hap_partitioned_dir, f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.merged.fastq.gz"), condition=CONDITIONS, hap=HAPLOTYPES),
         os.path.join(OUTDIR, "all_samples_read_alignment_stats_summary.tsv"),
         expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.expresso.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
-        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta"), condition=CONDITIONS, hap=HAPLOTYPES)
+        expand(os.path.join(OUTDIR, "transcripts/fasta", f"{SAMPLE_ID}.{{condition}}.{REF_NAME}.hap{{hap}}.stringtie3.fasta"), condition=CONDITIONS, hap=HAPLOTYPES),
+        expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.bam"), hap=HAPLOTYPES),
+        expand(os.path.join(splice_aln_hap_partitioned_dir, SAMPLE_ID+"."+config["ref_name"] + ".hap{hap}.all_conditions.merged.fastq.gz"), hap=HAPLOTYPES),
+        expand(os.path.join(OUTDIR, "transcripts/gtf", f"{SAMPLE_ID}.stringtie_merged.espresso-stringtie3.transcripts.hap{{hap}}.gtf"), hap=HAPLOTYPES),
     output:
         os.path.join(OUTDIR, "finish.txt")
     shell:
